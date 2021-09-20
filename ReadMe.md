@@ -2,4 +2,9 @@
 Grant Perkins, Tian Yu Fan, Jean Claude Zarate, Mingjie Zeng
 
 ## Requirements
-- Python 3.9
+- Docker
+
+## Uses within Docker:
+- Python 3.6.9
+- TensorFlow 2.6.0
+- OpenCV 3.6.5
