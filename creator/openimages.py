@@ -1,9 +1,6 @@
-import json
 import os
-import sys
 from glob import glob
-from shutil import copyfile, rmtree
-from zipfile import ZipFile
+from shutil import rmtree
 
 import pandas
 from PIL import Image
@@ -16,25 +13,28 @@ class OpenImagesDownloader:
     Class for converting OpenImages format into an Axon usable format (TFRecords)
     """
 
-    def __init__(self, nb_faces):
+    def __init__(self, nb_faces: int):
         # will error if not in Title Case
         self.labels = ["Human face"]
-        self.title = "_".join([i.replace(" ", "") for i in self.labels])
-        assert type(self.labels) == list
         self.limit = nb_faces
-        assert type(self.limit) == int
         print("Getting dataset, size: {}, contents: {}".format(self.limit, self.labels))
         self.label_map = {}
         self.image_data = {}
         self.csv = []
         self.data_dir = "./data"
+        self.labels_dir = self.data_dir + "/labels"
+        self.meta_dir = self.data_dir + "/meta"  # class descriptions and all labels go here
+        self.images_dir = self.data_dir + "/images"
+        self.normal_dir = self.images_dir + "/normal_faces"  # unmasked faces
+        self.masks_dir = self.images_dir + "/masks"
+        self.mask_dir = self.images_dir + "/masked_faces"
 
-    def download(self):
+    def download_normal_faces(self):
         """
         API call to download OpenImages slice
         :return: None
         """
-        download_dataset(dest_dir=self.data_dir + "/images", meta_dir="./data/meta", class_labels=self.labels,
+        download_dataset(dest_dir=self.normal_dir, meta_dir=self.meta_dir, class_labels=self.labels,
                          exclusions_path=None, limit=self.limit)
 
     def parse_line(self, key, label, height, width, box):
@@ -51,11 +51,11 @@ class OpenImagesDownloader:
             [key, label, height, width, int(box["xmin"] * width), int(box["xmax"] * width), int(box["ymin"] * height),
              int(box["ymax"] * height)])
 
-    def create_csv(self):
+    def create_normal_csv(self):
         print("Parsing huge .csv. Give me a minute.")
         # get all jpgs
-        images = glob(self.data_dir + "/images/*.jpg")
-        with open(os.path.join("./data/meta/class-descriptions-boxable.csv")) as file:
+        images = glob(self.normal_dir + "/*.jpg")
+        with open(self.meta_dir + "/class-descriptions-boxable.csv") as file:
             # save map of class ids to human-readable names
             for row in file.readlines():
                 row = row.rstrip().split(',')
@@ -63,22 +63,21 @@ class OpenImagesDownloader:
 
         try:
             # create image dir if it doesn't exist
-            os.mkdir(self.data_dir + "/images")
+            os.mkdir(self.images_dir)
         except FileExistsError:
             pass
-        print("Copying...")
+        print("Gathering image metadata")
         for image_path in images:
             # save image size as only ratios are given
             im = Image.open(image_path)
             width, height = im.size
             file_id = image_path.split("/")[-1].rstrip(".jpg")
             self.image_data.update({file_id: {"height": height, "width": width}})
-        print("Image metadata compiled.")
 
         # want to save only labels that are used.
-        all_labels_df = pandas.read_csv(os.path.join("./data/meta/train-annotations-bbox.csv"))
+        all_labels_df = pandas.read_csv(self.meta_dir + "/train-annotations-bbox.csv")
         all_labels_df.set_index("ImageID", inplace=True)
-
+        print("Collecting labels")
         labels = [i.lower() for i in self.labels]
         for key in self.image_data.keys():
             entry = all_labels_df.loc[key]
@@ -103,20 +102,16 @@ class OpenImagesDownloader:
                 pass
 
         print("Writing label file")
-        with open(self.data_dir + "/labels.csv", 'w+') as csv_file:
+        try:
+            # create image dir if it doesn't exist
+            os.mkdir(self.labels_dir)
+        except FileExistsError:
+            pass
+        with open(self.labels_dir + "/normal_faces.csv", 'w+') as csv_file:
             csv_file.write("key,label,height,width,xmin,xmax,ymin,ymax\n")
             for line in self.csv:
                 csv_file.write(",".join(map(str, line)) + "\n")
 
     def clean(self):
-        rmtree(self.data_dir + "/meta")
-        print("Cleaned", self.data_dir + "/meta")
-
-
-if __name__ == "__main__":
-    print("Python initialized")
-    downloader = OpenImagesDownloader(5000)
-    downloader.download()
-    downloader.create_csv()
-    downloader.clean()
-    print("Complete")
+        rmtree(self.meta_dir)
+        print("Cleaned", self.meta_dir)
