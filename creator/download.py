@@ -127,10 +127,9 @@ def download_dataset(
     for class_label in label_codes.keys():
 
         # create directory to contain the image files for the class
-        images_dir = os.path.join(dest_dir, class_label, "images")
-        os.makedirs(images_dir, exist_ok=True)
+        os.makedirs(dest_dir, exist_ok=True)
         class_directories[class_label] = {
-            "images_dir": images_dir,
+            "images_dir": dest_dir,
         }
 
         # create directory to contain the annotation files for the class
