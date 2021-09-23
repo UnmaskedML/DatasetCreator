@@ -11,13 +11,13 @@ class Mask:
     class for dealing with masks
     """
 
-    def __init__(self, x_min, x_max, y_min, y_max):
+    def __init__(self, x_min, x_max, y_min, y_max, orientation):
         self.x_min, self.x_max, self.y_min, self.y_max = x_min, x_max, y_min, y_max
         self.height = self.y_max - self.y_min
         self.width = self.x_max - self.x_min
         self.vertical_scale = 2
         self.orientations = ["mid", "left", "right", "mid_left", "mid_right"]
-        self.orientation = 2
+        self.orientation = orientation
         self.mask_dir = "./data/images/masks"
 
     def get_mask(self):
@@ -87,10 +87,13 @@ class Photoshop:
             normal_face = NormalFaceImage(path, self.normal_labels)
             labels = normal_face.get_labels()
             print(labels, type(labels))
-            i, label = [*labels.iterrows()][0]
-            print(label)
-            mask = Mask(label["xmin"], label["xmax"], label["ymin"], label["ymax"])
-            self.server.send_image(normal_face.test_mask(mask))
+            masks = [2, 4]
+            for i, label in labels.iterrows():
+                mask = Mask(label["xmin"], label["xmax"], label["ymin"], label["ymax"], masks[i])
+                tmp_image = normal_face.test_mask(mask)
+                normal_face.image = tmp_image
+                # break
+            self.server.send_image(normal_face.image)
             break
 
 
