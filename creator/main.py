@@ -17,7 +17,7 @@ class Mask:
         self.width = self.x_max - self.x_min
         self.vertical_scale = 2
         self.orientations = ["mid", "left", "right", "mid_left", "mid_right"]
-        self.orientation = 0
+        self.orientation = 2
         self.mask_dir = "./data/images/masks"
 
     def get_mask(self):
@@ -45,11 +45,14 @@ class NormalFaceImage:
     def test_mask(self, mask):
         tmp_image = self.image
         mask_image = mask.get_mask()
-        for y in range(mask.height//mask.vertical_scale):
+        for y in range(mask.height // mask.vertical_scale):
+            print(y)
             for x in range(mask.width):
                 pixel = mask_image[y, x]
                 if pixel[3] != 0:
-                    tmp_image[mask.y_min+mask.height-mask.height//mask.vertical_scale, mask.x_min+x] = pixel[0:3]
+                    tmp_y = mask.y_min + mask.height - mask.height // mask.vertical_scale + y
+                    tmp_x = mask.x_min + x
+                    tmp_image[tmp_y, tmp_x] = pixel[0:3]
         return tmp_image
 
 
@@ -84,7 +87,7 @@ class Photoshop:
             normal_face = NormalFaceImage(path, self.normal_labels)
             labels = normal_face.get_labels()
             print(labels, type(labels))
-            i, label = [*labels.iterrows()][1]
+            i, label = [*labels.iterrows()][0]
             print(label)
             mask = Mask(label["xmin"], label["xmax"], label["ymin"], label["ymax"])
             self.server.send_image(normal_face.test_mask(mask))
