@@ -4,6 +4,7 @@ from glob import glob
 import cv2
 import pandas as pd
 import threading
+import numpy as np
 
 
 class Mask:
@@ -19,20 +20,29 @@ class Mask:
         self.orientations = ["mid", "left", "right", "mid_left", "mid_right"]
         self.orientation = 0
         self.mask_dir = "./data/images/masks"
+        self.colors = ["black", "white", "blue"]
+        self.color = 0
 
     def get_mask(self):
-        filename = self.orientations[self.orientation] + "_blue.png"
+        filename = self.orientations[self.orientation] + "_{}.png".format(self.colors[self.color])
         mask = cv2.imread(self.mask_dir + "/" + filename, cv2.IMREAD_UNCHANGED)
-        print("shape:", mask.shape)
         resized_mask = cv2.resize(mask, (self.width, self.height // self.vertical_scale))
         return resized_mask
 
-    def next(self):
+    def next_orientation(self):
         self.orientation += 1
-        if self.orientation > len(self.orientations):
+        if self.orientation >= len(self.orientations):
             self.orientation = 0
 
+    def next_color(self):
+        self.color += 1
+        if self.color >= len(self.colors):
+            self.color = 0
+
     def get_coordinates(self):
+        """
+        :return: Coordinates of this mask
+        """
         return self.x_min, self.y_max - self.height // self.vertical_scale, self.y_max, self.y_max
 
 
@@ -43,19 +53,26 @@ class NormalFaceImage:
         self.image = cv2.imread(path)
 
     def get_labels(self):
+        """
+        :return: labels from csv file for this image
+        """
         return self.normal_labels.loc[self.normal_labels["key"] == self.filename]
 
-    def test_mask(self, mask):
-        tmp_image = self.image
+    def test_mask(self, mask: Mask):
+        """
+        Tests a mask on this face
+        :param mask: a mask object
+        :return: an OpenCV image
+        """
+        tmp_image = np.copy(self.image)
         mask_image = mask.get_mask()
-        for y in range(mask.height // mask.vertical_scale):
-            print(y)
+        for y in range(mask.height // mask.vertical_scale):  # mask covers bottom half of face
             for x in range(mask.width):
                 pixel = mask_image[y, x]
-                if pixel[3] != 0:
+                if pixel[3] != 0:  # checks alpha channel
                     tmp_y = mask.y_min + mask.height - mask.height // mask.vertical_scale + y
                     tmp_x = mask.x_min + x
-                    tmp_image[tmp_y, tmp_x] = pixel[0:3]
+                    tmp_image[tmp_y, tmp_x] = pixel[0:3]  # ignore alpha channel, len(channels) = 3 in normal image
         return tmp_image
 
 
@@ -92,25 +109,30 @@ class Photoshop:
         """
         Puts masks on every image
         """
-        with open("./labels/masks.csv", 'w+') as mask_csv:
+        with open(self.labels_dir + "/masks.csv", 'w+') as mask_csv:
             mask_csv.write("key,label,xmin,ymin,xmax,ymax\n")
             for path in self.normal_image_paths:
                 normal_face = NormalFaceImage(path, self.normal_labels)
                 labels = normal_face.get_labels()
                 for i, label in labels.iterrows():
                     result = "d"  # try next mask
-                    while result == "d":  # while trying masks
-                        mask = Mask(label["xmin"], label["xmax"], label["ymin"], label["ymax"])
+                    mask = Mask(label["xmin"], label["xmax"], label["ymin"], label["ymax"])
+                    while result != "s" and mask != "i":  # while trying masks
                         tmp_image = normal_face.test_mask(mask)
                         self.server.send_image(tmp_image)
-                        result = input("(s) Save mask, (a) ignore mask, (d) try next mask: ")
-                        if result == "s":
+                        result = input("(s) Save mask, (a) ignore mask, (d) try next mask, (w) try another color: ")
+                        if result == "s":  # saving this mask
                             out = "{},mask,{},{},{},{}\n".format(normal_face.filename, *mask.get_coordinates())
                             mask_csv.write(out)
                             normal_face.image = tmp_image
-                        elif result == "i":
+                        elif result == "a":  # ignoring this mask
                             break
-                break
+                        elif result == "d":  # trying another orientation
+                            mask.next_orientation()
+                        elif result == "w":  # trying another color
+                            mask.next_color()
+                        else:  # unknown character
+                            print("Invalid input.")
 
 
 if __name__ == "__main__":
