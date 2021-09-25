@@ -75,6 +75,9 @@ class NormalFaceImage:
                     tmp_image[tmp_y, tmp_x] = pixel[0:3]  # ignore alpha channel, len(channels) = 3 in normal image
         return tmp_image
 
+    def save_image(self):
+        cv2.imwrite(".data/images/masked_faces/" + self.filename, self.image)
+
 
 class Photoshop:
     """
@@ -109,7 +112,7 @@ class Photoshop:
         """
         Puts masks on every image
         """
-        with open(self.labels_dir + "/masks.csv", 'w+') as mask_csv:
+        with open(self.labels_dir + "/masked_faces.csv", 'w+') as mask_csv:
             mask_csv.write("key,label,xmin,ymin,xmax,ymax\n")
             for path in self.normal_image_paths:
                 normal_face = NormalFaceImage(path, self.normal_labels)
@@ -133,6 +136,7 @@ class Photoshop:
                             mask.next_color()
                         else:  # unknown character
                             print("Invalid input.")
+                normal_face.save_image()
 
 
 if __name__ == "__main__":
