@@ -76,7 +76,7 @@ class NormalFaceImage:
         return tmp_image
 
     def save_image(self):
-        cv2.imwrite(".data/images/masked_faces/" + self.filename, self.image)
+        cv2.imwrite("./data/images/masked_faces/" + self.filename, self.image)
 
 
 class Photoshop:
@@ -112,12 +112,15 @@ class Photoshop:
         """
         Puts masks on every image
         """
-        with open(self.labels_dir + "/masked_faces.csv", 'w+') as mask_csv:
-            mask_csv.write("key,label,xmin,ymin,xmax,ymax\n")
-            for path in self.normal_image_paths:
+        start = int(input("Image to start from (n): "))
+        with open(self.labels_dir + "/masked_faces.csv", 'a') as mask_csv:
+            if start == 0:
+                mask_csv.write("key,label,xmin,ymin,xmax,ymax\n")
+            for i, path in enumerate(self.normal_image_paths[start:]):
+                print("Image #", start + i, ", percent done:",100*((start + i)/len(self.normal_image_paths)))
                 normal_face = NormalFaceImage(path, self.normal_labels)
                 labels = normal_face.get_labels()
-                for i, label in labels.iterrows():
+                for _, label in labels.iterrows():
                     result = "d"  # try next mask
                     mask = Mask(label["xmin"], label["xmax"], label["ymin"], label["ymax"])
                     while result != "s" and mask != "i":  # while trying masks
