@@ -84,8 +84,8 @@ class Resizer:
         # "scale" means if we have 180x180 picture, it will be scaled up to 2000x2000 (if w & h are 2000)
         # "fit" means we will just keep it in the top left corner and add black bars
         # aspect ratio is always preserved
-        self.mode = "scale" # "keep og"
-        self.background = (0, 0, 0) # BGR not RGB
+        self.mode = "scale"
+        self.background = (0, 0, 0) # allegedly BGR not RGB
         # Technically Configurable but less commonly changed
         self.mask_labels = "../MaskTheFaceNew/mask.csv"
         self.normal_dir = "../MaskTheFaceNew/normal_faces"  # ground truth
