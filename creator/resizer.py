@@ -2,6 +2,7 @@ from typing import List
 import cv2
 import os
 import numpy as np
+import random
 
 class MaskCSVRow:
     def __init__(self, img, img_height, img_width, face_xtl, face_ytl, face_xbr, face_ybr,
@@ -74,6 +75,9 @@ class CSVFile:
                 ) for line in self.data if line[0] == key]
 
 
+def is_for_training():
+    return random.randrange(1, 80) > 20
+
 class Resizer:
     def __init__(self, width: int, height: int):
         print("Make sure your working directory is in the creator folder")
@@ -87,37 +91,59 @@ class Resizer:
         self.mode = "scale"
         self.background = (0, 0, 0) # allegedly BGR not RGB
         # Technically Configurable but less commonly changed
+        self.output_csv = "./data/images/rs_data.csv"
         self.mask_labels = "../MaskTheFaceNew/mask.csv"
         self.normal_dir = "../MaskTheFaceNew/normal_faces"  # ground truth
         self.masked_dir = "../MaskTheFaceNew/normal_faces_masked" # edited photos with masks
-        self.resized_truth_dir = "./data/images/rs_truth" # resized ground truth
-        self.resized_masked_dir = "./data/images/rs_masked" # resized pics with edited masks
-        self.resized_masks_dir = "./data/images/rs_masks" # resized pics with the mask (what gets removed)
+        self.resized_truth_training_dir =  "./data/images/rs_truth_training" # resized ground truth
+        self.resized_truth_test_dir =      "./data/images/rs_truth_test" # resized ground truth
+        self.resized_masks_training_dir =  "./data/images/rs_masks_training" # resized pics with the mask (what gets removed)
+        self.resized_masks_test_dir =      "./data/images/rs_masks_test" # resized pics with the mask (what gets removed)
+        self.resized_masked_training_dir = "./data/images/rs_masked_training" # resized pics with edited masks
+        self.resized_masked_test_dir =     "./data/images/rs_masked_test" # resized pics with edited masks
 
-        if not os.path.exists(self.resized_truth_dir):
-            os.makedirs(self.resized_truth_dir)
-        if not os.path.exists(self.resized_masked_dir):
-            os.makedirs(self.resized_masked_dir)
-        if not os.path.exists(self.resized_masks_dir):
-            os.makedirs(self.resized_masks_dir)
+        for dir in [self.resized_truth_training_dir, self.resized_truth_test_dir, self.resized_masks_training_dir,
+                    self.resized_masks_test_dir, self.resized_masked_training_dir, self.resized_masked_test_dir]:
+            if not os.path.exists(dir):
+                os.makedirs(dir)
+
 
     def do_all(self):
         labels_masked_faces = CSVFile(self.mask_labels)
         labels_masked_faces.open()
         unique_keys = labels_masked_faces.get_unique_keys()
+
+        csv_output = open(self.output_csv, 'w')
+        csv_output.write("image_id,mask_num,xmin,ymin,xmax,ymax\n")
+
         for u_key in unique_keys:
-            # this image is first when alphabetically sorted
+            # this image is first when alphanumerically sorted in windows
             #if u_key != "00a0d634ad200ced.jpg":
             #    continue
             print(u_key)
+            image_id = u_key.split('.')[0]
+            # What we read
             normal_face_image_path = self.normal_dir + "/" + u_key
-            masked_face_image_path = self.masked_dir + "/" + u_key.split('.')[0] + '_surgical.jpg'
-            resized_truth_path = self.resized_truth_dir + "/" + u_key
-            resized_mask_channel_path = self.resized_masks_dir + "/" + u_key
-            resized_masked_path = self.resized_masked_dir + "/" + u_key.split('.')[0] + '_surgical.jpg'
+            masked_face_image_path = self.masked_dir + "/" + image_id + '_surgical.jpg'
+            # What we'll write
+            resized_truth_training_path = self.resized_truth_training_dir + "/" + u_key
+            resized_truth_test_path = self.resized_truth_test_dir + "/" + u_key
+            resized_masked_training_path = self.resized_masked_training_dir + "/" + image_id + '_surgical.jpg'
+            resized_masked_test_path = self.resized_masked_test_dir + "/" + image_id + '_surgical.jpg'
+
+            def gen_mask_channel_path(is_training, num):
+                """
+                num: some images have multiple masks, so there is 1 mask channel image per mask per image
+                """
+                if is_training:
+                    return f"{self.resized_masks_training_dir}/{image_id}_{num}.jpg"
+                else:
+                    return f"{self.resized_masks_test_dir}/{image_id}_{num}.jpg"
+            # Load pictures into memory
             normal_face_image = cv2.imread(normal_face_image_path, cv2.IMREAD_COLOR)
             masked_face_image = cv2.imread(masked_face_image_path, cv2.IMREAD_COLOR)
             if self.mode == "scale":
+                is_training_image = is_for_training()
                 dimensions = normal_face_image.shape
                 og_height = dimensions[1]
                 og_width = dimensions[0]
@@ -141,35 +167,37 @@ class Resizer:
                 x_offset= 0
                 background[y_offset:y_offset+im_resized_truth.shape[0], x_offset:x_offset+im_resized_truth.shape[1]] = im_resized_truth
                 # output_truth = cv2.addWeighted(background, 1.0, im_resized_truth, 1.0, 0)
-                cv2.imwrite(resized_truth_path, background)
+                cv2.imwrite(resized_truth_training_path if is_training_image else resized_truth_test_path, background)
 
                 # create mask channel image
-                mask_channel = np.zeros((og_width, og_height, 3), np.uint8)
-                mask_channel[:] = (0, 0, 0)
                 mask_bounding_boxes = labels_masked_faces.get_all_where_key_equals(u_key)
+                mask_num = 1
                 for mask in mask_bounding_boxes:
+                    new_mask_channel = np.zeros((og_width, og_height, 3), np.uint8)
+                    new_mask_channel[:] = (0, 0, 0)
+                    minx = min(mask.mask_xtl, mask.mask_xbl, mask.mask_xtm, mask.mask_xbm)
+                    miny = min(mask.mask_ytl, mask.mask_ytr, mask.mask_ytm)
+                    maxx = max(mask.mask_xbr, mask.mask_xtr)
+                    maxy = max(mask.mask_ybl, mask.mask_ybm, mask.mask_ybr)
                     # opencv2's top-down logic
-                    cv2.rectangle(mask_channel,
-                                  (
-                                      min(mask.mask_xtl, mask.mask_xbl, mask.mask_xtm, mask.mask_xbm),
-                                      min(mask.mask_ytl, mask.mask_ytr, mask.mask_ytm)
-                                  ),
-                                  (
-                                      max(mask.mask_xbr, mask.mask_xtr),
-                                      max(mask.mask_ybl, mask.mask_ybm, mask.mask_ybr)
-                                  ),
+                    cv2.rectangle(new_mask_channel,
+                                  (minx, miny),
+                                  (maxx, maxy),
                                   (255, 255, 255), -1)
-
-                # resize image
-                mask_channel = cv2.resize(mask_channel, (scaled_height, scaled_width), interpolation=cv2.INTER_AREA)
-                # create the background
-                background = np.zeros((self.width, self.height, 3), np.uint8)
-                background[:] = self.background
-                # paste image onto background (black bars for aspect ratio)
-                y_offset = 0
-                x_offset= 0
-                background[y_offset:y_offset+mask_channel.shape[0], x_offset:x_offset+mask_channel.shape[1]] = mask_channel
-                cv2.imwrite(resized_mask_channel_path, background)
+                    # resize image
+                    new_mask_channel = cv2.resize(new_mask_channel, (scaled_height, scaled_width), interpolation=cv2.INTER_AREA)
+                    # create the background
+                    background = np.zeros((self.width, self.height, 3), np.uint8)
+                    background[:] = self.background
+                    # paste image onto background (black bars for aspect ratio)
+                    # yes we're pasting a mostly black image onto black
+                    y_offset = 0
+                    x_offset= 0
+                    background[y_offset:y_offset+new_mask_channel.shape[0], x_offset:x_offset+new_mask_channel.shape[1]] = new_mask_channel
+                    path = gen_mask_channel_path(is_training_image, mask_num)
+                    cv2.imwrite(path, background)
+                    csv_output.write(f"{image_id},{mask_num},{minx},{miny},{maxx},{maxy}\n")
+                    mask_num += 1
 
                 # resize image
                 masked_face_image = cv2.resize(masked_face_image, (scaled_height, scaled_width), interpolation=cv2.INTER_AREA)
@@ -179,8 +207,10 @@ class Resizer:
                 # paste image onto background (black bars for aspect ratio)
                 y_offset = 0
                 x_offset= 0
-                background[y_offset:y_offset+mask_channel.shape[0], x_offset:x_offset+mask_channel.shape[1]] = masked_face_image
-                cv2.imwrite(resized_masked_path, background)
+                background[y_offset:y_offset+masked_face_image.shape[0], x_offset:x_offset+masked_face_image.shape[1]] = masked_face_image
+                cv2.imwrite(resized_masked_training_path if is_training_image else resized_masked_test_path, background)
+
+        csv_output.close()
 
 if __name__ == "__main__":
     resizer = Resizer(800, 800)
