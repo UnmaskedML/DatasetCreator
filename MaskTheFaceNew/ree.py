@@ -1,7 +1,21 @@
 import cv2
 
-image = cv2.imread("normal_faces/0000b86e2fd18333.jpg")
+image = cv2.imread("normal_faces/00006c07d2b033d1.jpg")
 
+mask = [328, 317, 417, 326, 472, 367, 451, 406, 385, 417, 325, 377]
+
+cols = "mask_xtl,mask_ytl,mask_xtm,mask_ytm,mask_xtr,mask_ytr,mask_xbr,mask_ybr,mask_xbm,mask_ybm,mask_xbl,mask_ybl".split(
+    ',')
+
+y_cols = [i for i in cols if 'y' in i]
+x_cols = [i for i in cols if 'x' in i]
+ymin = min([mask[cols.index(i)] for i in y_cols])
+ymax = max([mask[cols.index(i)] for i in y_cols])
+xmin = min([mask[cols.index(i)] for i in x_cols])
+xmax = max([mask[cols.index(i)] for i in x_cols])
+
+cv2.circle(image, (xmin, ymin), 3, (0, 0, 255), -1)
+cv2.circle(image, (xmax, ymax), 3, (0, 0, 255), -1)
 
 # def handle_mouse_click(e, x, y, flags, param):
 
@@ -46,12 +60,12 @@ image = cv2.imread("normal_faces/0000b86e2fd18333.jpg")
 #     for i in range(len(points)):
 #         point = points[i]
 #         cv2.circle(image, (int(point[0]), int(point[1])), 3, (0, 0, i*40), -1)
-cv2.circle(image, (733, 413), 3, (0, 0, 255), -1)
-cv2.circle(image, (759, 411), 3, (0, 0, 255), -1)
-cv2.circle(image, (850, 428), 3, (0, 0, 255), -1)
-cv2.circle(image, (841, 467), 3, (0, 0, 255), -1)
-cv2.circle(image, (758, 488), 3, (0, 0, 255), -1)
-cv2.circle(image, (741, 464), 3, (0, 0, 255), -1)
+# cv2.circle(image, (733, 413), 3, (0, 0, 255), -1)
+# cv2.circle(image, (759, 411), 3, (0, 0, 255), -1)
+# cv2.circle(image, (850, 428), 3, (0, 0, 255), -1)
+# cv2.circle(image, (841, 467), 3, (0, 0, 255), -1)
+# cv2.circle(image, (758, 488), 3, (0, 0, 255), -1)
+# cv2.circle(image, (741, 464), 3, (0, 0, 255), -1)
 
 # 384, 348, 705, 669
 
