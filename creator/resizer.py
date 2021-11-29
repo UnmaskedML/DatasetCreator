@@ -196,7 +196,7 @@ class Resizer:
                     background[y_offset:y_offset+new_mask_channel.shape[0], x_offset:x_offset+new_mask_channel.shape[1]] = new_mask_channel
                     path = gen_mask_channel_path(is_training_image, mask_num)
                     cv2.imwrite(path, background)
-                    csv_output.write(f"{image_id},{mask_num},{minx},{miny},{maxx},{maxy}\n")
+                    csv_output.write(f"{image_id},{mask_num},{int(minx * scaling_factor)},{int(miny * scaling_factor)},{int(maxx * scaling_factor)},{int(maxy * scaling_factor)}\n")
                     mask_num += 1
 
                 # resize image
@@ -212,6 +212,55 @@ class Resizer:
 
         csv_output.close()
 
+class ResizedDataReader():
+    def __init__(self, path='./rs_data.csv'):
+        self.path = path
+        self.lines = []
+        self.headers = []
+        self.data = []
+
+    def read_all(self) -> None:
+        fp = open(self.path, 'r')
+        self.lines = fp.readlines()
+        self.lines = [line.rstrip() for line in self.lines]
+        self.headers = self.lines[0].split(',')
+        self.data = [
+            [
+                row_elems[0], # image_id
+                int(row_elems[1]), # mask_num
+                int(row_elems[2]), # xmin
+                int(row_elems[3]), # ymin
+                int(row_elems[4]), # xmax
+                int(row_elems[5]) # ymax
+            ] for row_elems in [line.split(',') for line in self.lines[1:]]
+        ]
+        fp.close()
+
+    def get_num_masks(self, image_id) -> int:
+        return len([row for row in self.data if row[0] == image_id])
+
+    def get_mask_coords(self, image_id, mask_num) -> List[int]:
+        """
+        Returns [xmin, ymin, xmax, ymax], all values will be -1 if mask info not found
+        :param image_id:
+        :param mask_num:
+        :return:
+        """
+        rows = [row for row in self.data if row[0] == image_id and row[1] == mask_num]
+        if len(rows) != 1:
+            return [-1, -1, -1, -1]
+        return rows[0][2:]
+
+    def print_faulty(self) -> List[str]:
+        faulty = [row for row in self.data if row[2] < 0 or row[3] < 0 or row[4] > 800 or row[5] > 800]
+        for row in faulty:
+            print(f"Image ID {row[0]} has mask {row[1]} with bounds X {row[2]} - {row[4]} Y {row[3]} - {row[5]}")
+
 if __name__ == "__main__":
-    resizer = Resizer(800, 800)
-    resizer.do_all()
+    #resizer = Resizer(800, 800)
+    #resizer.do_all()
+    reader = ResizedDataReader('./data/images/rs_data.csv')
+    reader.read_all()
+    print(reader.get_num_masks('0001c3e14fe71e81'))
+    print(reader.get_mask_coords('0001c3e14fe71e81', 2))
+    reader.print_faulty()
